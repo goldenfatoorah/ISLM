@@ -1,0 +1,387 @@
+# Importing Required Libraries
+
+library(car)
+library(broom)
+library(readxl)
+library(dplyr)
+library(faraway)
+library(ggplot2)
+library(lubridate)
+
+######~~~~~~~~~~ Question 1 ~~~~~~~~~~######
+
+# Importing Stocks Data
+stocks <- read.csv(file = "stockdata.csv",
+                   header = TRUE)
+
+head(stocks)
+
+#### (a) ####
+
+stocks_form <- "price ~ cap.to.gdp + q.ratio + gaap + trailing.pe + avg.allocation + vol"
+
+stocks_model <- lm(formula = stocks_form,
+                   data = stocks)
+
+summary(stocks_model)
+
+#### (b) ####
+
+plot(x = stocks_model,
+     which = 3,
+     sub.caption = NA)
+
+# There is no pattern in the above residual plot. The residuals are equally spread over the entire range.
+# Therefore, the assumption of constant variance of the errors is not violated.
+
+#### (c) ####
+
+# Hypothesis:
+# H0 : There is no correlation among the residuals.
+# H1 : The residuals are auto-correlated.
+
+durbinWatsonTest(stocks_model)
+
+#### (d) ####
+
+plot(x = stocks_model,
+     which = 2,
+     sub.caption = NA)
+
+# Hypothesis:
+# H0 : The residuals are normally distributed.
+# H1 : The residuals are not normally distributed.
+
+shapiro.test(x = residuals(stocks_model))
+
+#### (e) ####
+
+pairs(stocks)
+
+#### (f) ####
+
+plot(x = stocks_model,
+     which = 5,
+     sub.caption = NA)
+
+# The observations 9, 36 and 85 are potential outliers in the data.
+
+plot(x = stocks_model,
+     which = 4,
+     sub.caption = NA)
+
+#### (g) ####
+
+augment(stocks_model) %>%
+  data.frame() %>%
+  top_n(wt = .cooksd,
+        n = 3)
+
+#### (h) ####
+
+returns <- ((stocks$price - lag(x = stocks$price)) - 1)[-1]
+
+hist(x = returns,
+     breaks = 20,
+     probability = TRUE,
+     main = "Histogram of Returns",
+     xlab = "Returns")
+
+lines(density(returns))
+
+# Hypothesis:
+# H0 : The returns are normally distributed.
+# H1 : The returns are not normally distributed.
+
+shapiro.test(x = returns)
+
+# Since the p-value > 0.05, we do not reject H_0 and conclude that the returns are normally distributed. 
+# Also, the histogram of returns follows normal distribution.
+
+######~~~~~~~~~~ Question 2 ~~~~~~~~~~######
+
+data(cheddar)
+
+head(cheddar)
+
+#### (a) ####
+
+taste_form <- "taste ~ ."
+
+taste_model <- lm(formula = taste_form,
+                  data = cheddar)
+
+summary(taste_model)
+
+#### (b) ####
+
+plot(x = taste_model,
+     which = 1,
+     sub.caption = NA)
+
+# There is no pattern in the above residual plot. The residuals are equally spread over the entire range.
+# Therefore, the assumption of constant variance of the errors is not violated.
+
+#### (c) ####
+
+# Hypothesis:
+# H0 : There is no correlation among the residuals.
+# H1 : The residuals are auto-correlated.
+
+durbinWatsonTest(taste_model)
+
+# Since, p-value > 0.05, therefore we do not reject H0 and conclude that there is no correlation among the residuals.
+
+#### (d) ####
+
+plot(x = taste_model,
+     which = 2,
+     sub.caption = NA)
+
+# Hypothesis:
+# H0 : The residuals are normally distributed.
+# H1 : The residuals are not normally distributed.
+
+shapiro.test(x = residuals(taste_model))
+
+# For the Shapiro Wilk Test, since the p-value > 0.05, we do not reject H0 and conclude that the residuals are normally distributed.
+# The same can be observed from the QQ-Plot of the residuals.
+
+#### (e) ####
+
+pairs(cheddar)
+
+# There is no issue of non-linearity in the data. Clear positive linear relationships can be observed.
+# Also, the point to note here is the problem of multi-collinearity in the data as the predictors are also exhibit linear relatioships.
+
+#### (f) ####
+
+plot(x = taste_model,
+     which = 5,
+     sub.caption = NA)
+
+# The observations 15, 12, and 30 can be considered as outliers.
+
+plot(x = taste_model,
+     which = 4,
+     sub.caption = NA)
+
+# We can observe that the observations discussed are the ones having higher value of Cook's Distance.
+
+#### (g) ####
+
+augment(taste_model) %>%
+  data.frame() %>%
+  top_n(wt = .cooksd,
+        n = 3)
+
+######~~~~~~~~~~ Question 3 ~~~~~~~~~~######
+
+houst <- read_xls(path = "HOUST.xls",
+                  range = "A12:B172",
+                  col_names = c("DATE", "HOUST"))
+
+head(houst)
+
+gdp <- read_xls(path = "GDP.xls",
+                range = "A21:B183",
+                col_names = c("DATE", "GDP"))
+
+head(gdp)
+
+cpi <- read_xls(path = "CPI.xls",
+                range = "A57:B217",
+                col_names = c("DATE", "CPI"))
+
+head(cpi)
+
+pop <- read_xls(path = "POP.xls",
+                range = "A12:B171",
+                col_names = c("DATE", "POP"))
+
+head(pop)
+
+#### (a) ####
+
+house <- merge(x = houst, y = pop, by = "DATE")
+house <- merge(x = house, y = gdp, by = "DATE")
+house <- merge(x = house, y = cpi, by = "DATE")
+
+house <- house %>%
+  mutate(QUARTER = factor(quarter(x = DATE)))
+
+house_model <- lm(formula = "HOUST ~ GDP + CPI + QUARTER",
+                  data = house)
+
+summary(house_model)
+
+#### (b) ####
+
+ggplot(house,
+       aes(x = DATE,
+           y = HOUST)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in Number of New House Constructions",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+ggplot(house,
+       aes(x = DATE,
+           y = GDP)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in GDP",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+ggplot(house,
+       aes(x = DATE,
+           y = CPI)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in CPI",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+ggplot(house,
+       aes(x = DATE,
+           y = POP)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in Population",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+#### (c) ####
+
+
+
+#### (d) ####
+
+ggplot(house,
+       aes(x = QUARTER,
+           y = HOUST,
+           fill = QUARTER)) +
+  geom_boxplot() +
+  theme_light() +
+  theme(legend.position = "none") +
+  labs(title = "Boxplot",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+#### (e) ####
+
+house_model2 <- lm(formula = "HOUST ~ GDP + CPI + POP + QUARTER",
+                   data = house)
+
+summary(house_model2)
+
+######~~~~~~~~~~ Question 4 ~~~~~~~~~~######
+
+train <- read.csv(file = "train-default.csv")
+
+head(train)
+
+test <- read.csv(file = "test-default.csv")
+
+head(test)
+
+#### (a) ####
+
+train <- train %>%
+  mutate(default = ifelse(test = default == "Yes",
+                          yes = 1,
+                          no = 0),
+         student = ifelse(test = student == "Yes",
+                          yes = 1,
+                          no = 0))
+
+default_model1 <- glm(formula = "default ~ balance + income",
+                      data = train,
+                      family = "binomial")
+
+summary(default_model1)
+
+#### (b) ####
+
+AIC(default_model1)
+
+#### (c) ####
+
+coeffs <- round(coefficients(default_model1), digits = 4)
+
+exp(coeffs[[1]]); exp(coeffs[[2]]); exp(coeffs[[3]])
+
+#### (d) ####
+
+test <- test %>%
+  mutate(default_pred = predict(object = default_model1,
+                                newdata = test,
+                                type = "response"),
+         default_pred = ifelse(test = round(default_pred) >= 0.5,
+                               yes = "Yes",
+                               no = "No"))
+
+table(x = test$default,
+      y = test$default_pred)
+
+mean(test$default == test$default_pred) * 100
+
+#### (e) ####
+
+coeffs <- coefficients(default_model1)
+
+1/(1 + exp(-(coeffs[[1]] + coeffs[[2]] * 2000 + coeffs[[3]] * 40000)))
+
+#### (f) ####
+
+plot(x = train$student,
+     y = train$balance)
+
+cor(x = train$student,
+    y = train$balance)
+
+#### (g) ####
+
+default_model2 <- glm(formula = "default ~ balance + income + student",
+                      data = train,
+                      family = "binomial")
+
+summary(default_model2)
+
+#### (h) ####
+
+
+
+######~~~~~~~~~~ Question 5 ~~~~~~~~~~######
+
+# install.packages("faraway")
+library(faraway)
+
+data(dvisits)
+head(dvisits)
+
+#### (a) ####
+
+# First, we'll try to fit the model including all the variables as predictors.
+
+vis_form <- "hospdays ~ ."
+
+vis_model <- lm(formula = vis_form,
+                data = dvisits)
+
+summary(vis_model)
+
+#### (b) ####
+
+plot(x = vis_model,
+     which = 1,
+     sub.caption = NA)
+
+
+
+######~~~~~~~~~~ Question 6 ~~~~~~~~~~######
+
+# Importing COVID-19 cases data
+
+cases <- read.csv(file = "https://covidtracking.com/api/v1/states/daily.csv")
