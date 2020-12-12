@@ -1,0 +1,668 @@
+---
+title: "Intro_To_Linear_Statistical_Models_Final"
+author: "Aman Goswami & Abdulaziz Alshalfan"
+date: "12/15/2020"
+output: pdf_document
+---
+
+### General Information : Aziz and I collaborated through Github on the final given the timezone difference. We uploaded our codes at a repository with details here - https://github.com/ag77in/ISLM. We both did all 6 questions together for a dry run and then proceeded to discuss to see how we can improve the answers and the final results. We then created the individual assignments for the Final.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Let us load libraries
+
+```{r results='hide', message=FALSE, warning=FALSE}
+# clear environment
+rm(list = ls())
+
+# defining libraries
+
+library(ggplot2)
+library(dplyr)
+library(PerformanceAnalytics)
+library(data.table)
+library(sqldf)
+library(nortest)
+library(MASS)
+library(rpart)
+library(class)
+library(ISLR)
+library(scales)
+library(ClustOfVar)
+library(GGally)
+library(reticulate)
+library(ggthemes)
+library(RColorBrewer) 
+library(gridExtra)
+library(kableExtra)
+library(Hmisc) 
+library(corrplot)
+library(energy)
+library(nnet)
+library(Hotelling)
+library(car)
+library(devtools)
+library(ggbiplot)
+library(factoextra)
+library(rgl)
+library(FactoMineR)
+library(psych)
+library(nFactors)
+library(scatterplot3d)
+library(lmtest)
+library(mctest)
+library(aod)
+library(InformationValue)
+library(pROC)
+library(tidyverse)
+library(caret)
+library(Information)
+library(reshape)
+library(olsrr)
+library(faraway)
+library(readxl)
+```
+
+### 1) Fit a model to explain price in terms of the predictors. Perform regression diagnostics to answer the following questions. Display any plots that are relevant. Suggest improvements if any.
+
+### Let us load the data and summarise the information
+
+```{r}
+# reading data
+stockdata <- read.csv('/Users/mac/Downloads/final-2020-canvas/datasets/stockdata.csv')
+str(stockdata)
+```
+
+```{r}
+#summary
+summary(stockdata)
+```
+
+### Key observations -
+1. cap.to.gdp., trailing.pe, gaap, avg.allocation are marginally positively skewed while q.ratio is marginally negatively skewed
+2. Volatility looks normal however we will confirm this later
+3. We don't see any evidence of outliers but we will check the plots before commenting on this
+
+### Any missing values ?
+
+```{r}
+data <-na.omit(stockdata)
+str(data)
+```
+
+We did not find any missing values in the data.
+
+### Correlation plot -
+
+We check correlation before moving towards modeling exercise.
+
+```{r}
+M<-cor(stockdata)
+head(round(M,2))
+corrplot(M, method="color")
+```
+
+### Key observations -
+1. We see price is correlated strongly with avg.allocation (+0.62) 
+2. We also see price being correlated with q.ratio, cap.to.gdp, gaap and trailing.pe in similar range (+0.39-+0.42)
+3. We see very little correlation between most of the independent variables however we note the -ve correlations of cap.to.gdp with q.ratio, trailing.pe and gaap albeit small
+
+### Outlier/ Univariate checks -
+
+We confirm our earlier hypothesis of no outliers by looking at some univariate and outlier checks.
+
+```{r}
+par(mfrow=c(2,5))
+for (i in 1:length(stockdata)) {
+        boxplot(stockdata[,i], main=names(stockdata[i]), type="l")
+}
+
+```
+
+We see no evidence of any outliers in the univariate form.
+
+We now proceed to modeling exercise.
+
+\newpage
+
+### 1a) Fit a model to explain price in terms of the predictors. Which variables are important, can any of the variables be removed ? Please use F-tests to justify.
+
+We use lm() function for this regression
+
+```{r}
+fit <- lm(price~cap.to.gdp+ q.ratio+gaap+trailing.pe+avg.allocation+vol, data=stockdata)
+summary(fit)
+```
+
+We see significant result in p-value for all variables except for Volatility which is not significant even at 10% level of signifance hence this variable can be removed from the model. We get F value of 318 with probability <0.5 indicating the joint hypothesis of this model being better than null model. Every other variable seems important to prediction.
+
+The above model has a good R-square of 95.35%.
+
+We now confirm this with joint hypothesis test using F-statistic. We use linearHypothesis() for this.
+
+```{r}
+linearHypothesis(fit, c("cap.to.gdp=0"))
+linearHypothesis(fit, c("q.ratio =0"))
+linearHypothesis(fit, c("gaap=0"))
+linearHypothesis(fit, c("trailing.pe=0"))
+linearHypothesis(fit, c("avg.allocation=0"))
+linearHypothesis(fit, c("vol=0"))
+```
+
+We ran the F-tests for the hypothesis of each individual variable and in only one case is the F-score is very low (0.3265) in the 'vol'=0 hypothesis. Hence, this confirms from our linear regression model again that given the Pr(>F) is 0.56, we find volatility to not influence the price and hence we can remove this variable from our model.
+
+Sometimes, however it is important to run the heteroskedastic robust version of the F-test as well. We do this as follows -
+
+```{r}
+linearHypothesis(fit, c("cap.to.gdp=0"),white.adjust = "hc1")
+linearHypothesis(fit, c("q.ratio =0"),white.adjust = "hc1")
+linearHypothesis(fit, c("gaap=0"),white.adjust = "hc1")
+linearHypothesis(fit, c("trailing.pe=0"),white.adjust = "hc1")
+linearHypothesis(fit, c("avg.allocation=0"),white.adjust = "hc1")
+linearHypothesis(fit, c("vol=0"),white.adjust = "hc1")
+```
+
+We see no change in results although the Pr(>F) for vol=0 hypothesis is slightly higher than before. We still only confirm that volatility can be removed from the model.
+
+### 1b) Check the constant variance assumption for the errors.
+
+We do this in 3 ways - we look at scale-location plot of the regression, then perform ncvTest() and finally Breusch-pagan test for homoskedasticity.
+
+```{r}
+plot(fit,which=3)
+```
+\
+
+We mostly see as they say "stars in the sky" expression in the above graph. While the line visually is not completely horizontal, we do not in particular see any pattern and it would be hard to deny that the errors are homoskedastic. However, we perform further tests to confirm our suspicion.
+
+###  ncvTest() For Homoscedasticity
+
+```{r}
+ncvTest(fit)
+```
+\
+We see a p-value > .05, indicating homoscedasticity.
+
+### Breusch-Pagan Test For Homoscedasticity
+
+```{r}
+bptest(fit)
+```
+
+\
+We once again see a p-value > .05, indicating homoscedasticity.
+
+### 1c) Check the independentness of the errors assumption.
+
+We can do this with the durbin watson statistic. The Durbin Watson examines whether the errors are autocorrelated  with themselves. The null states that they are not autocorrelated.
+
+```{r}
+durbinWatsonTest(fit)
+```
+\
+We see that p-value > 0.05 so the errors are not autocorrelated.
+
+### 1d) Check the normality assumption.
+
+We again do this in 2 ways - we look at QQ plot and perform the Shapiro Wilk normality test.
+
+The normal probability plot of residuals should approximately follow a straight line.
+
+```{r}
+plot(fit,which=2)
+```
+\
+We see points falling mostly along reference line however we also see some falling outside on both sides of the quantile-spectrum so we dig deeper with a statistical test.
+
+### Shapiro-Wilk Normality Test
+
+```{r}
+resid <- studres(fit) 
+shapiro.test(resid)
+```
+
+From the p-value = 0.02474 < 0.05, we can see that the residuals are not normally distributed
+
+### 1e) Is non-linearity a problem ?
+
+The linearity assumption can be checked by inspecting the Residuals vs Fitted plot.
+
+```{r}
+plot(fit,which=1)
+```
+\
+
+This is very interesting since the residuals take both +ve and -ve values. However, we see an inverted U shaped curve above. This suggests that the fit of the model can be improved by taking the square of some explanatory variable. 
+
+### 1f) Check for outliers, compute and plot the cook's distance.
+
+A standard way to check for outliers is to look at residuals above a certain threshold. An example would be as follows -
+
+```{r}
+rstandard(fit)[abs(rstandard(fit)) > 2]
+```
+
+Here, we see points 9, 29, 36, 42, 59 and 85 with large residuals but note that not all of them or maybe none of them could be outliers. So we now look at the model plot of Residuals vs leverage.
+
+```{r}
+plot(fit, which=5)
+```
+
+Leverage statistic is defined as - \
+$\hat{L}= \dfrac{2(p+1)}{n}$ 
+where $p$ is number of predictors and $n$ is number of observations \
+
+In the above graph we see all points fall under the dashed lines of the cook's distance (missing) which tells us there are no outliers in the data but still some influential points do exist.
+
+We can plot the cook's distance with the below command -
+
+```{r}
+#Cook's distance
+plot(fit, 4)
+```
+
+We see that apart from three points - 9, 36 & 85, everyone else's cook's distance is below 0.06
+
+We also compute the cook's distance for each observation as follows -
+
+```{r}
+cooks.distance(fit)
+```
+\
+
+### 1g) Check for influential points.
+
+This was partially done above itself, but neverthless we can check for 
+influential points through the plot itself. 
+
+```{r}
+# High leverage points
+plot(fit, which=5)
+```
+
+So from this plot again, we see points
+9, 36, 85 as values of extreme nature and we see
+these as influential points. We also see some other point to the extreme right 
+with high leverage but low residual. 
+Either ways, we check for more robust solution through below.
+
+A rule of thumb is that an observation has high influence 
+if Cook's distance exceeds $\dfrac{4}{(n - p - 1)}$
+
+```{r}
+cooks.distance(fit) > 4 / length(cooks.distance(fit))
+```
+
+We see points 9, 36, 42, 59, 70, 85 as influential points just going by cooks distance.
+
+We also however check for hatvalues in the data.
+
+```{r}
+hatvalues(fit) > 0.1
+```
+
+We see only few observations with hatvalues above 0.1. These are points 9, 35, 36, 48, 68 & 94.
+
+Now, we combine the above two results of cooks distance and hatvalues which is exactly what influence.measures does for us.
+
+```{r}
+summary(influence.measures(fit))
+```
+
+The last two columns give the cooks distance and the hatvalues. We see points 9,42,59 and 85 as influential observations given cooks distance > 0.5 and hat value also > 0.5.
+
+We plot the results slightly better now -
+
+```{r}
+ols_plot_cooksd_bar(fit)
+ols_plot_resid_stand(fit)
+ols_plot_resid_lev(fit)
+```
+
+Above we plotted the cooks d bar plot, the standarized residual plot and the rstudent vs leverage plot.
+
+The first plot tells us that points 9,85, 36, 59, 42 and 70 have larger cooks distance than other points
+The second plot tells us that points 59, 85, 42, 9, 29 and 36 have larger residuals
+And the third plot tells us that if we use a leverage threshold of 0.14 we do not get any outlier but we see how close points 9, 36, 85, 42, 29 and 59 are in the range we create and these are clearly the most influential points in the data.
+
+### 1h) The return at time t is defined as r(t)=[p(t+1)/p(t)]-1 where p is price data for day t. Are returns normally distributed ? Please justify using qq plot and normality test.
+
+First, we create a 'return' variable in the data using the above expression.
+
+```{r}
+# create the lag of price
+stockdata$price_lag  <- lag(stockdata$price)
+stockdata$return <- (stockdata$price_lag/stockdata$price) - 1 
+
+# We ignore the first observation as it is NA
+return_data <- na.omit(stockdata)
+```
+
+We now check the qq plot -
+
+```{r}
+qqPlot(return_data$return)
+```
+
+The QQ plot shows that returns look pretty normally distributed.
+
+We also perform the Shapiro wilk normality test.
+
+```{r}
+shapiro.test(return_data$return)
+```
+
+From the p-value = 0.4559 > 0.05, we can see that the returns are normally distributed.
+
+This makes sense to us as in most stock price modeling, one does not model the price but rather models the return.
+
+\newpage
+
+### 2) Repeat question 1 from a to i on cheddar dataset from the book by fitting a model with taste as the response and the other three variables as predictors. Answer the questions posed in the first problem.
+
+### Let us load the data and summarise the information
+
+```{r}
+# reading data
+data(cheddar)
+str(cheddar)
+```
+
+```{r}
+#summary
+summary(cheddar)
+```
+
+### Key observations -
+1. taste is +vely skewed, Acetic and H2S are marginally +vely skewed  while only Lactic is negatively skewed.
+2. We don't see any evidence of outliers but we will check the plots before commenting on this
+
+### Any missing values ?
+
+```{r}
+data <-na.omit(cheddar)
+str(data)
+```
+
+We did not find any missing values in the data.
+
+### Correlation plot -
+
+We check correlation before moving towards modeling exercise.
+
+```{r}
+M<-cor(cheddar)
+head(round(M,2))
+corrplot(M, method="color")
+```
+
+### Key observations -
+1. We see high correlation between taste and H2S, Lactic (>0.7). We also see Acetic is correlated well with taste (>0.5).
+2. We also see strong correlations between the independent variables as well (>0.6).
+
+### Outlier/ Univariate checks -
+
+We confirm our earlier hypothesis of no outliers by looking at some univariate and outlier checks.
+
+```{r}
+par(mfrow=c(2,5))
+for (i in 1:length(cheddar)) {
+        boxplot(cheddar[,i], main=names(cheddar[i]), type="l")
+}
+
+```
+
+We see no evidence of any outliers in the univariate form.
+
+We now proceed to modeling exercise.
+
+\newpage
+
+### 2a) Fit a model to explain taste in terms of the predictors. Which variables are important, can any of the variables be removed ? Please use F-tests to justify.
+
+We use lm() function for this regression
+
+```{r}
+fit <- lm(taste~Acetic+H2S+Lactic, data=cheddar)
+summary(fit)
+```
+
+We see significant result in p-value for both H2S and Lactic at 5% however we do not see Acetic acid coming as significant in the model hence this variable can be removed from the model. We get F value of 16.2 with probability <0.5 indicating the joint hypothesis of this model being better than null model.
+
+The above model has a good R-square of 65.35%.
+
+We now confirm this with joint hypothesis test using F-statistic. We use linearHypothesis() for this.
+
+```{r}
+linearHypothesis(fit, c("Acetic=0"))
+linearHypothesis(fit, c("H2S =0"))
+linearHypothesis(fit, c("Lactic=0"))
+```
+
+We ran the F-tests for the hypothesis of each individual variable and in only one case is the F-score is very low (0.0054) in the 'Acetic'=0 hypothesis. Hence, this confirms from our linear regression model again that given the Pr(>F) is 0.94, we find concentration of acetic acid to not influence the taste of cheese and hence we can remove this variable from our model.
+
+Sometimes, however it is important to run the heteroskedastic robust version of the F-test as well. We do this as follows -
+
+```{r}
+linearHypothesis(fit, c("Acetic=0"),white.adjust = "hc1")
+linearHypothesis(fit, c("H2S =0"),white.adjust = "hc1")
+linearHypothesis(fit, c("Lactic=0"),white.adjust = "hc1")
+```
+
+We see no change in results although the Pr(>F) for Acetic=0 hypothesis is slightly higher than before. We still only confirm that Acetic can be removed from the model.
+
+### 2b) Check the constant variance assumption for the errors.
+
+We do this in 3 ways - we look at scale-location plot of the regression, then perform ncvTest() and finally Breusch-pagan test for homoskedasticity.
+
+```{r}
+plot(fit,which=3)
+```
+\
+
+We mostly see as they say "stars in the sky" expression in the above graph. While the line visually is not completely horizontal, we do not in particular see any pattern and it would be hard to deny that the errors are homoskedastic. However, we perform further tests to confirm our suspicion.
+
+###  ncvTest() For Homoscedasticity
+
+```{r}
+ncvTest(fit)
+```
+\
+We see a p-value > .05, indicating homoscedasticity.
+
+### Breusch-Pagan Test For Homoscedasticity
+
+```{r}
+bptest(fit)
+```
+
+\
+We once again see a p-value > .05, indicating homoscedasticity.
+
+### 2c) Check the independentness of the errors assumption.
+
+We can do this with the durbin watson statistic. The Durbin Watson examines whether the errors are autocorrelated  with themselves. The null states that they are not autocorrelated.
+
+```{r}
+durbinWatsonTest(fit)
+```
+\
+We see that p-value > 0.05 so the errors are not autocorrelated.
+
+### 1d) Check the normality assumption.
+
+We again do this in 2 ways - we look at QQ plot and perform the Shapiro Wilk normality test.
+
+The normal probability plot of residuals should approximately follow a straight line.
+
+```{r}
+plot(fit,which=2)
+```
+\
+We see points falling mostly along reference line. We see some minor observations falling outside range but still we feel that the residuals are normal. We confirm our suspicions with a statistical test.
+
+# Shapiro-Wilk Normality Test
+
+```{r}
+resid <- studres(fit) 
+shapiro.test(resid)
+```
+
+From the p-value = 0.5444 > 0.05, we can see that the residuals are normal which satisfies the linear regression assumption.
+
+### 1e) Is non-linearity a problem ?
+
+The linearity assumption can be checked by inspecting the Residuals vs Fitted plot.
+
+```{r}
+plot(fit,which=1)
+```
+\
+
+We see the linearity relationship mostly holds in the data indicating non-linearity isn't an issue. This might be because the acid levels are already in a log scale.
+
+### 2f) Check for outliers, compute and plot the cook's distance.
+
+A standard way to check for outliers is to look at residuals above a certain threshold. An example would be as follows -
+
+```{r}
+rstandard(fit)[abs(rstandard(fit)) > 1.5]
+```
+
+Here, we see points 8,12 and 15 with large residuals but note that not all of them or maybe none of them could be outliers. So we now look at the model plot of Residuals vs leverage.
+
+```{r}
+plot(fit, which=5)
+```
+
+Leverage statistic is defined as - \
+$\hat{L}= \dfrac{2(p+1)}{n}$ 
+where $p$ is number of predictors and $n$ is number of observations \
+
+In the above graph we see all points fall under the dashed lines of the cook's distance (missing) which tells us there are no outliers in the data but still some influential points do exist.
+
+We can plot the cook's distance with the below command -
+
+```{r}
+#Cook's distance
+plot(fit, 4)
+```
+
+We see that apart from three points - 15, 12 and 30, everyone else's cook's distance is below 0.1
+
+We also compute the cook's distance for each observation as follows -
+
+```{r}
+cooks.distance(fit)
+```
+\
+
+### 2g) Check for influential points.
+
+This was partially done above itself, but neverthless we can check for 
+influential points through the plot itself. 
+
+```{r}
+# High leverage points
+plot(fit, which=5)
+```
+
+So from this plot again, we see points
+15, 12 and 30 as values of extreme nature and we see
+these as influential points. 
+
+A rule of thumb is that an observation has high influence 
+if Cook's distance exceeds $\dfrac{4}{(n - p - 1)}$
+
+```{r}
+cooks.distance(fit) > 4 / length(cooks.distance(fit))
+```
+
+We see only point 15 as influential point just going by cooks distance.
+
+We also however check for hatvalues in the data.
+
+```{r}
+hatvalues(fit) > 0.25
+```
+
+We see only few observations with hatvalues above 0.25. These are points 20 and 26.
+
+Now, we combine the above two results of cooks distance and hatvalues which is exactly what influence.measures does for us.
+
+```{r}
+summary(influence.measures(fit))
+```
+
+The last two columns give the cooks distance and the hatvalues. We see points 6, 15, 24 and 26 as influential observations however points 6,24 and 26 have high hat value but low cooksd whereas point 15 is definitely the most influential observation in the data.
+
+We plot the results slightly better now -
+
+```{r}
+ols_plot_cooksd_bar(fit)
+ols_plot_resid_stand(fit)
+ols_plot_resid_lev(fit)
+```
+
+Above we plotted the cooks d bar plot, the standarized residual plot and the rstudent vs leverage plot.
+
+The first plot tells us that point 15 has larger cooks distance than other points
+The second plot tells us that points 15 again has larger residuals
+And the third plot tells us that if we use a leverage threshold of 0.267 we do not get any outlier but we see 15 as highly influential given the large residual.
+
+\newpage
+
+### 3) The problem is to discover relation between US new house construction starts data (HOUST) and macro economic indicators : GDP, CPI, and POP. 
+
+### a) Combine all data into an R dataframe object and construct dummy or factor variable for 4 quarters. First model is HOUST~GDP+ CPI + quarter
+
+We first load all the files and look at their structures-
+
+### Loading files
+
+```{r}
+# in the cpi file, the data starts from row 55 onwards so we skip the first 54 rows
+cpi <- read_excel('/Users/mac/Downloads/final-2020-canvas/datasets/House/CPI.xls',skip=54)
+# in the gdp file, the data starts from row 19 onwards so we skip the first 18 rows
+gdp <- read_excel('/Users/mac/Downloads/final-2020-canvas/datasets/House/GDP.xls',skip=18)
+# in the pop file, the data starts from row 11 onwards so we skip the first 10 rows
+pop <- read_excel('/Users/mac/Downloads/final-2020-canvas/datasets/House/POP.xls',skip=10)
+# in the houst file, the data starts from row 11 onwards so we skip the first 10 rows
+houst <- read_excel('/Users/mac/Downloads/final-2020-canvas/datasets/House/HOUST.xls',skip=10)
+```
+
+```{r}
+str(cpi)
+str(gdp)
+str(pop)
+str(houst)
+```
+
+### Key observations -
+
+1. We see that cpi has 161 observations from 1976-01-01 till 2016-01-01 \
+2. We see that gdp has 163 observations from 1976-01-01 till 2016-07-01 \
+3. We see that pop has 160 observations from 1976-01-01 till 2015-10-01 \
+4. We see that houst has 161 observations from 1975-10-01 till 2015-10-01. \
+
+We use a nested merge to merge the 4 files. Do note, we do not include some observations that only have a GDP value or only a CPI value. We take the data from 1976 1st quarter till 2015 last quarter this way.
+
+### Merging the 4 datasets 
+
+```{r}
+data  <- merge(merge(merge(houst,cpi, by.x='observation_date', by.y='DATE')
+               ,gdp, by.x='observation_date', by.y='DATE')
+               ,pop, by.x='observation_date', by.y='observation_date')
+colnames(data)[1] <- "DATE"
+colnames(data)[2] <- "HOUST"
+colnames(data)[3] <- "CPI"
+colnames(data)[4] <- "GDP"
+colnames(data)[5] <- "POP"
+```
+
+### Constructing the dummy variables for each quarter
+
+
+
