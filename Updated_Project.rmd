@@ -1,0 +1,544 @@
+# Importing Required Libraries
+
+library(car)
+library(broom)
+library(readxl)
+library(dplyr)
+library(faraway)
+library(ggplot2)
+library(lubridate)
+
+######~~~~~~~~~~ Question 1 ~~~~~~~~~~######
+
+# Importing Stocks Data
+stocks <- read.csv(file = "stockdata.csv",
+                   header = TRUE)
+
+head(stocks)
+
+#### (a) ####
+
+stocks_form <- "price ~ cap.to.gdp + q.ratio + gaap + trailing.pe + avg.allocation + vol"
+
+stocks_model <- lm(formula = stocks_form,
+                   data = stocks)
+
+summary(stocks_model)
+
+# Hypothesis for Partial F-test:
+# H0: The model with vol is not significantly better than the model without vol.
+# H1: The model with vol is significantly better than the model without vol.
+
+stocks_form1 <- "price ~ cap.to.gdp + q.ratio + gaap + trailing.pe + avg.allocation"
+
+stocks_model1 <- lm(formula = stocks_form1,
+                    data = stocks)
+
+anova(stocks_model1, stocks_model)
+
+# Since the p-value > 0.05, we do not reject H_0 and conclude that the model with vol is not significantly better than the model without vol.
+
+# Therefore, the final model is:
+summary(stocks_model1)
+
+
+#### (b) ####
+
+plot(x = stocks_model1,
+     which = 3,
+     sub.caption = NA)
+
+# There is no pattern in the above residual plot. The residuals are equally spread over the entire range.
+# Therefore, the assumption of constant variance of the errors is not violated.
+
+#### (c) ####
+
+# Hypothesis:
+# H0 : There is no correlation among the residuals.
+# H1 : The residuals are auto-correlated.
+
+durbinWatsonTest(stocks_model1)
+
+#### (d) ####
+
+plot(x = stocks_model1,
+     which = 2,
+     sub.caption = NA)
+
+# Hypothesis:
+# H0 : The residuals are normally distributed.
+# H1 : The residuals are not normally distributed.
+
+shapiro.test(x = residuals(stocks_model1))
+
+#### (e) ####
+
+pairs(stocks)
+
+#### (f) ####
+
+plot(x = stocks_model1,
+     which = 5,
+     sub.caption = NA)
+
+# The observations 9, 36 and 85 are potential outliers in the data.
+
+plot(x = stocks_model1,
+     which = 4,
+     sub.caption = NA)
+
+#### (g) ####
+
+augment(stocks_model1) %>%
+  data.frame() %>%
+  top_n(wt = .cooksd,
+        n = 3)
+
+#### (h) ####
+
+returns <- ((stocks$price - lag(x = stocks$price)) - 1)[-1]
+
+hist(x = returns,
+     breaks = 20,
+     probability = TRUE,
+     main = "Histogram of Returns",
+     xlab = "Returns")
+
+lines(density(returns))
+
+# Hypothesis:
+# H0 : The returns are normally distributed.
+# H1 : The returns are not normally distributed.
+
+shapiro.test(x = returns)
+
+# Since the p-value > 0.05, we do not reject H_0 and conclude that the returns are normally distributed. 
+# Also, the histogram of returns follows normal distribution.
+
+######~~~~~~~~~~ Question 2 ~~~~~~~~~~######
+
+data(cheddar)
+
+head(cheddar)
+
+#### (a) ####
+
+taste_form <- "taste ~ ."
+
+taste_model <- lm(formula = taste_form,
+                  data = cheddar)
+
+summary(taste_model)
+
+# Hypothesis for Partial F-test:
+# H0: The model with Acetic is not significantly better than the model without Acetic.
+# H1: The model with Acetic is significantly better than the model without Acetic.
+
+taste_form1 <- "taste ~ H2S + Lactic"
+
+taste_model1 <- lm(formula = taste_form1,
+                   data = cheddar)
+
+anova(taste_model1, taste_model)
+
+# Since the p-value > 0.05, we do not reject H_0 and conclude that the model with Acetic is not significantly better than the model without Acetic.
+
+# Now, we'll also test for the significance of the variable Lactic in the model.
+
+# Hypothesis for Partial F-test:
+# H0: The model with Lactic is not significantly better than the model without Lactic.
+# H1: The model with Lactic is significantly better than the model without Lactic.
+
+taste_form2 <- "taste ~ H2S"
+
+taste_model2 <- lm(formula = taste_form2,
+                   data = cheddar)
+
+anova(taste_model2, taste_model1)
+
+# Here, since the p-value < 0.05, we reject H_0 and conclude that the model with Lactic is not significantly better than the model without Lactic.
+# Therefore, the final model is:
+
+summary(taste_model1)
+
+#### (b) ####
+
+plot(x = taste_model1,
+     which = 1,
+     sub.caption = NA)
+
+# There is no pattern in the above residual plot. The residuals are equally spread over the entire range.
+# Therefore, the assumption of constant variance of the errors is not violated.
+
+#### (c) ####
+
+# Hypothesis:
+# H0 : There is no correlation among the residuals.
+# H1 : The residuals are auto-correlated.
+
+durbinWatsonTest(taste_model1)
+
+# Since, p-value > 0.05, therefore we do not reject H0 and conclude that there is no correlation among the residuals.
+
+#### (d) ####
+
+plot(x = taste_model1,
+     which = 2,
+     sub.caption = NA)
+
+# Hypothesis:
+# H0 : The residuals are normally distributed.
+# H1 : The residuals are not normally distributed.
+
+shapiro.test(x = residuals(taste_model1))
+
+# For the Shapiro Wilk Test, since the p-value > 0.05, we do not reject H0 and conclude that the residuals are normally distributed.
+# The same can be observed from the QQ-Plot of the residuals.
+
+#### (e) ####
+
+pairs(cheddar)
+
+# There is no issue of non-linearity in the data. Clear positive linear relationships can be observed.
+# Also, the point to note here is the problem of multi-collinearity in the data as the predictors are also exhibit linear relatioships.
+
+#### (f) ####
+
+plot(x = taste_model1,
+     which = 5,
+     sub.caption = NA)
+
+# The observations 15, 12, and 30 can be considered as outliers.
+
+plot(x = taste_model1,
+     which = 4,
+     sub.caption = NA)
+
+# We can observe that the observations discussed are the ones having higher value of Cook's Distance.
+
+#### (g) ####
+
+augment(taste_model1) %>%
+  data.frame() %>%
+  top_n(wt = .cooksd,
+        n = 3)
+
+######~~~~~~~~~~ Question 3 ~~~~~~~~~~######
+
+houst <- read_xls(path = "HOUST.xls",
+                  range = "A12:B172",
+                  col_names = c("DATE", "HOUST"))
+
+head(houst)
+
+gdp <- read_xls(path = "GDP.xls",
+                range = "A21:B183",
+                col_names = c("DATE", "GDP"))
+
+head(gdp)
+
+cpi <- read_xls(path = "CPI.xls",
+                range = "A57:B217",
+                col_names = c("DATE", "CPI"))
+
+head(cpi)
+
+pop <- read_xls(path = "POP.xls",
+                range = "A12:B171",
+                col_names = c("DATE", "POP"))
+
+head(pop)
+
+#### (a) ####
+
+house <- merge(x = houst, y = pop, by = "DATE")
+house <- merge(x = house, y = gdp, by = "DATE")
+house <- merge(x = house, y = cpi, by = "DATE")
+
+house <- house %>%
+  mutate(QUARTER = factor(quarter(x = DATE)))
+
+house_model <- lm(formula = "HOUST ~ GDP + CPI + QUARTER",
+                  data = house)
+
+summary(house_model)
+
+#### (b) ####
+
+ggplot(house,
+       aes(x = DATE,
+           y = HOUST)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in Number of New House Constructions",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+ggplot(house,
+       aes(x = DATE,
+           y = GDP)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in GDP",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+ggplot(house,
+       aes(x = DATE,
+           y = CPI)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in CPI",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+ggplot(house,
+       aes(x = DATE,
+           y = POP)) +
+  geom_point() +
+  geom_line() +
+  theme_light() +
+  labs(title = "Quarterly Trends in Population",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+#### (c) ####
+
+
+#### (d) ####
+
+ggplot(house,
+       aes(x = QUARTER,
+           y = HOUST,
+           fill = QUARTER)) +
+  geom_boxplot() +
+  theme_light() +
+  theme(legend.position = "none") +
+  labs(title = "Boxplot",
+       caption = "Data Souce: Federal Reserve Bank of St. Loius")
+
+anova_model <- aov(formula = HOUST ~ QUARTER,
+                   data = house)
+
+summary(anova_model)
+
+TukeyHSD(anova_model, conf.level = 0.95)
+
+#### (e) ####
+
+house_model2 <- lm(formula = "HOUST ~ GDP + CPI + POP + QUARTER",
+                   data = house)
+
+summary(house_model2)
+
+######~~~~~~~~~~ Question 4 ~~~~~~~~~~######
+
+train <- read.csv(file = "train-default.csv")
+
+head(train)
+
+test <- read.csv(file = "test-default.csv")
+
+head(test)
+
+#### (a) ####
+
+train <- train %>%
+  mutate(default = ifelse(test = default == "Yes",
+                          yes = 1,
+                          no = 0),
+         student = ifelse(test = student == "Yes",
+                          yes = 1,
+                          no = 0))
+
+default_model1 <- glm(formula = "default ~ balance + income",
+                      data = train,
+                      family = "binomial")
+
+summary(default_model1)
+
+#### (b) ####
+
+AIC(default_model1)
+
+#### (c) ####
+
+coeffs <- round(coefficients(default_model1), digits = 4)
+
+exp(coeffs[[1]]); exp(coeffs[[2]]); exp(coeffs[[3]])
+
+# For a unit increase in balance, the odds of defaulting credit card debt increases by 1.0058
+#	For a unit increase in income, the odds of defaulting credit card debt increases by 1
+
+
+#### (d) ####
+
+def_test <- def_test %>% 
+  mutate(default_pred = predict(object = default_model1,
+                                newdata = def_test,
+                                type = "response"),
+         default_pred = ifelse(test = round(default_pred) >= 0.5,
+                               yes = "Yes",
+                               no = "No"))
+
+table(x = def_test$default,
+      y = def_test$default_pred)
+
+mean(def_test$default == def_test$default_pred) * 100
+
+#### (e) ####
+
+coeffs <- coefficients(default_model1)
+
+1/(1 + exp(-(coeffs[[1]] + coeffs[[2]] * 2000 + coeffs[[3]] * 40000)))
+
+#### (f) ####
+
+ggplot(def_train,
+       aes(x = factor(student),
+           y = balance,
+           group = student,
+           fill = factor(student))) +
+  geom_boxplot() +
+  theme_light() +
+  theme(legend.position = "none") +
+  labs(title = "Boxplot of Balance for Students and Non-Students",
+       x = "Student Status",
+       y = "Balance")
+
+cor(x = train$student,
+    y = train$balance)
+
+#### (g) ####
+
+def_train <- def_train %>% 
+  mutate(student = factor(student))
+
+default_model2 <- glm(formula = "default ~ balance + income + student + 0",
+                      data = def_train,
+                      family = "binomial")
+
+summary(default_model2)
+
+#### (h) ####
+
+coeffs <- round(x = coefficients(default_model2),
+                digits = 4)
+
+coeffs
+
+# The odds for a non-student being a defaulter is -10.907 while the odds for a student being a defaulter is -11.7165.
+# Here, the odds of defaulting the credit card debt is less for students as compared to non-students.
+# Therefore, the data says that it is more likely for a non-student to default their credit card debt compared to a student for different values of income level.
+
+
+######~~~~~~~~~~ Question 5 ~~~~~~~~~~######
+
+# install.packages("faraway")
+library(faraway)
+
+data(dvisits)
+head(dvisits)
+
+#### (a) ####
+
+# First, we'll try to fit the model including all the variables as predictors.
+
+vis_form <- "hospdays ~ ."
+
+vis_model <- lm(formula = vis_form,
+                data = dvisits)
+
+summary(vis_model)
+
+# We can observe that there are many insignificant variables in the model. Rather than testing the significance of individual variables one-by-one we'll use step-wise regression.
+
+# Intercept Model
+int_model <- lm(formula = "hospdays ~ 1",
+                data = dvisits)
+
+vis_step <- step(object = int_model,
+                 scope = list(lower = int_model,
+                              upper = formula(vis_model)),
+                 direction = "forward",
+                 data = dvisits,
+                 trace = FALSE)
+
+summary(vis_step)
+
+
+#### (b) ####
+
+plot(x = vis_step,
+     which = 1,
+     sub.caption = NA)
+
+#### (c) ####
+
+# Hypothesis:
+# H0: The residuals are normally distributed.
+# H1: The residuals are not normally distributed.
+
+vis_step_resid <- sample(x = residuals(vis_step),
+                         size = 1500,
+                         replace = FALSE)
+
+shapiro.test(x = vis_step_resid)
+
+#### (d) ####
+
+# Hypothesis:
+# H0: There is no correlation among the residuals.
+# H1: The residuals are auto-correlated.
+durbinWatsonTest(vis_step)
+
+#### (e) ####
+
+plot(x = vis_step,
+     which = 5,
+     sub.caption = NA)
+
+
+#### (f) ####
+
+vis_step$call$formula[[3]]
+
+plot(dvisits[, c("hospdays", "hospadmi", "nondocco",
+                 "freerepa", "chcond2", "actdays", "agesq",
+                 "age", "sex", "prescrib", "doctorco")])
+
+vif(vis_step)
+
+######~~~~~~~~~~ Question 6 ~~~~~~~~~~######
+
+# Importing COVID-19 cases data
+cases <- read.csv(file = "https://covidtracking.com/api/v1/states/daily.csv")
+
+# Splitting the data into train and test
+cases_train <- cases %>% 
+  filter(month(date) < 10)
+
+cases_test <- cases %>% 
+  filter(month(date) >= 10)
+
+covid_model <- lm(formula = "total ~ positive",
+                  data = cases_train)
+
+summary(covid_model)
+
+# Predictions using the model
+
+cases_test <- cases_test %>% 
+  mutate(total_pred = predict(object = covid_model,
+                              newdata = cases_test))
+
+# Model Evaluation
+
+# Model Accuracy on train data
+train_rmse <- sqrt((sum(covid_model$residuals ^ 2)) / nrow(cases_train))
+train_rmse
+
+# Model Accuracy on test data
+test_resid <- cases_test$total - cases_test$total_pred
+
+test_rmse <- sqrt((sum(test_resid ^ 2)) / nrow(cases_test))
+test_rmse
